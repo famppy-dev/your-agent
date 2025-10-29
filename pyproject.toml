@@ -1,0 +1,13 @@
+[project]
+name = "your-agent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.120.1",
+    "pydantic>=2.12.3",
+    "pymilvus>=2.6.2",
+    "python-multipart>=0.0.20",
+    "uvicorn>=0.38.0",
+]
