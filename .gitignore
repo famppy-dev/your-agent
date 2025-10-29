@@ -2,5 +2,4 @@ volumes
 .venv
 __pycache__
 *.pyc
-uv.lock
 test.api.http
