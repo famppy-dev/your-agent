@@ -16,40 +16,40 @@ ROLE_NAME = "lazy_agent_role"
 
 
 def connect_milvus():
-    """Milvus 서버 연결"""
+    """Milvus Server Connection"""
     try:
         client = MilvusClient(uri=MILVUS_URI, token=MILVUS_TOKEN)
-        logger.info("Milvus에 성공적으로 연결되었습니다.")
+        logger.info("Successfully connected to Milvus.")
         return client
     except Exception as e:
-        logger.error(f"연결 실패: {e}")
+        logger.error(f"Connection failed: {e}")
         raise
 
 def gen_initial_data():
-    """초기 데이터 생성"""
+    """Generate initial data"""
 
-    """사용자 생성"""
+    """User creation"""
     try:
         client.create_user(user_name=USERNAME, password=PASSWORD)
-        logger.info(f"사용자 '{USERNAME}' 생성 완료.")
+        logger.info(f"User '{USERNAME}' creation complete.")
     except Exception as e:
-        logger.warning(f"사용자 생성 실패: {e}")
+        logger.warning(f"Failed to create user: {e}")
 
-    """데이터베이스 생성"""
+    """Create a database"""
     try:
         client.create_database(
             db_name=DATABASE_NAME
         )
-        logger.info(f"데이터베이스 '{DATABASE_NAME}' 생성 완료.")
+        logger.info(f"Database '{DATABASE_NAME}' creation complete.")
     except Exception as e:
-        logger.warning(f"데이터베이스 생성 실패: {e}")
+        logger.warning(f"Failed to create database: {e}")
 
-    """역할 생성"""
+    """Create a role"""
     try:
         client.create_role(role_name=ROLE_NAME)
-        logger.info(f"역할 '{ROLE_NAME}' 생성 완료.")
+        logger.info(f"Role '{ROLE_NAME}' creation complete.")
     except Exception as e:
-        logger.warning(f"역할 생성 실패: {e}")
+        logger.warning(f"Failed to create role: {e}")
 
     try:
         client.grant_privilege_v2(
@@ -64,21 +64,21 @@ def gen_initial_data():
             collection_name="*",
             db_name=DATABASE_NAME,
         )
-        logger.info(f"역할 '{ROLE_NAME}'에 권한 부여 완료.")
+        logger.info(f"Granting permission to role '{ROLE_NAME}' completed.")
     except Exception as e:
-        logger.warning(f"권한 부여 실패: {e}")
+        logger.warning(f"Authorization failed: {e}")
 
-    """역할 할당"""
+    """Role assignment"""
     try:
         client.grant_role(user_name=USERNAME, role_name=ROLE_NAME)
-        logger.info(f"사용자 '{USERNAME}'에게 역할 '{ROLE_NAME}' 할당 완료.")
+        logger.info(f"Successfully assigned role '{ROLE_NAME}' to user '{USERNAME}'.")
     except Exception as e:
-        logger.warning(f"역할 할당 실패: {e}")
+        logger.warning(f"Role assignment failed: {e}")
 
     user_info = client.describe_user(user_name=USERNAME)
     role_info = client.describe_role(role_name=ROLE_NAME)
-    logger.info(f"사용자 '{USERNAME}' 역할: {user_info.get('roles', [])}")
-    logger.info(f"역할 '{ROLE_NAME}' 권한: {role_info.get('privileges', [])}")
+    logger.info(f"User '{USERNAME}' role: {user_info.get('roles', [])}")
+    logger.info(f"Role '{ROLE_NAME}' permissions: {role_info.get('privileges', [])}")
 
 if __name__ == "__main__":
     client = connect_milvus()

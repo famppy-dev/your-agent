@@ -1,7 +1,7 @@
-# Lazy agent
+# Your Agent
 
 ### Install 
-Docker composer 를 활용하여 Container 설치 
+Installing a container using Docker composer
 
 ```sh
 docker compose up -d
@@ -17,28 +17,26 @@ milvus-etcd         Up About a minute (healthy)   2379-2380/tcp
 ### Milvus
 
 
-#### 관리자 화면 접속 
+#### Access the admin screen
 ```
 http://localhost:8080/
 ```
-기본 접속 계정 `root`, 기본 비밀번호 `Milvus`
+Default login account `root`, default password `Milvus`
 
-#### 사용자 추가 
-`Role` 을 먼저 생성하고 `User` 생성
+#### Add User
+Create `Role` first, then create `User`
 
 
-### 서버 
-가상 환경 설정 
+### Server
+Setting up a virtual environment
 
 ```sh
 uv venv .venv
 source .venv/bin/activate 
 ```
 
-### DB 초기화
+### DB initialization
 
 ```sh
 python init_db.py
 ```
-
-<!-- pip3 install pymilvus==2.6.4 -->
