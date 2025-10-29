@@ -3,3 +3,5 @@ volumes
 __pycache__
 *.pyc
 test.api.http
+server/embedding/data/
+server/models/
