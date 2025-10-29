@@ -1,0 +1,4 @@
+volumes
+.venv
+__pycache__
+*.pyc
