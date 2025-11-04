@@ -1,15 +1,14 @@
 import asyncio
-import logging
 import uuid
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.responses import JSONResponse
 
+from server import getLogger
 from server.models.enums import AppErrorCode
 from server.models.response import ApiResponse
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 class TimeoutMiddleware(BaseHTTPMiddleware):

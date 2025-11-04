@@ -3,17 +3,23 @@ name = "your-agent"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
-    "accelerate>=1.11.0",
-    "fastapi>=0.120.1",
+    "accelerate",
+    "bitsandbytes>=0.48.2",
+    "fastapi",
     "flagembedding",
-    "llama-index>=0.14.6",
-    "llama-index-embeddings-huggingface>=0.6.1",
-    "pydantic>=2.12.3",
-    "pymilvus>=2.6.2",
-    "python-multipart>=0.0.20",
-    "sentencepiece>=0.2.1",
+    "llama-index>=0.12.42",
+    "llama-index-embeddings-huggingface>=0.5.5",
+    "llama-index-vector-stores-milvus>=0.8.7",
+    "peft>=0.17.1",
+    "pydantic",
+    "pymilvus",
+    "python-dotenv>=1.2.1",
+    "python-multipart",
+    "sentencepiece",
+    "timm>=1.0.21",
     "torch",
-    "uvicorn>=0.38.0",
+    "uvicorn",
+    "vllm==0.11.0",
 ]

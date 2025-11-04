@@ -20,9 +20,7 @@ class BGERerankPostprocessor(BaseNodePostprocessor):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.reranker_model = FlagReranker(
-            reranker_model_path, trust_remote_code=True, use_fp16=use_fp16
-        )
+        self.reranker_model = FlagReranker(reranker_model_path, use_fp16=use_fp16)
         self.top_k = top_k
 
     def _postprocess_nodes(
@@ -39,4 +37,4 @@ class BGERerankPostprocessor(BaseNodePostprocessor):
 
         for node, score in zip(nodes, scores):
             node.score = score
-        return sorted(nodes, key=lambda x: x.score or 0, reverse=True)[:5]
+        return sorted(nodes, key=lambda x: x.score or 0, reverse=True)[: self.top_k]

@@ -1,5 +1,3 @@
-import logging
-
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,11 +6,6 @@ from server.models.response import ApiResponse, ErrorDetail
 
 from .middleware import log, timeout
 from .routers import health
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
 
 app = FastAPI(title="Your Agent Middleware", version="0.1.0")
 

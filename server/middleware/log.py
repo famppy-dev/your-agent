@@ -1,13 +1,13 @@
-import logging
 import time
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
+from server import getLogger
 from server.models.enums import AppErrorCode
 from server.models.response import ApiResponse
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
