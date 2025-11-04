@@ -1,7 +1,7 @@
 from pymilvus import MilvusClient
 
 from server import getLogger
-from server.db import (
+from server import (
     MILVUS_COLLECTION_NAME,
     MILVUS_URI,
     MILVUS_PASSWORD,

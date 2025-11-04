@@ -1,6 +1,6 @@
 from pymilvus import DataType, MilvusClient
 from server import getLogger
-from server.db import (
+from server import (
     MILVUS_EMBEDDING_FIELD,
     MILVUS_PASSWORD,
     MILVUS_TEXT_FIELD,

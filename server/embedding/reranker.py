@@ -8,8 +8,8 @@ from FlagEmbedding import FlagReranker
 class BGERerankPostprocessor(BaseNodePostprocessor):
 
     model_config = ConfigDict(
-        extra="allow",  # self.reranker 같은 동적 속성 허용
-        arbitrary_types_allowed=True,  # FlagReranker 타입 허용
+        extra="allow",
+        arbitrary_types_allowed=True,
     )
 
     def __init__(

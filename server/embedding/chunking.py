@@ -5,8 +5,6 @@ from llama_index.core import (
     VectorStoreIndex,
     SimpleDirectoryReader,
     Settings,
-    StorageContext,
-    load_index_from_storage,
 )
 from llama_index.core.node_parser import SentenceSplitter, SemanticSplitterNodeParser
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
@@ -21,7 +19,7 @@ import re
 from pymilvus import MilvusException
 
 from server import getLogger
-from server.db import (
+from server import (
     MILVUS_COLLECTION_NAME,
     MILVUS_EMBEDDING_FIELD,
     MILVUS_PASSWORD,
@@ -66,19 +64,19 @@ class ChunkingProcess:
         self.embed_model = HuggingFaceEmbedding(
             model_name=model_id,
             cache_folder=model_dir,
-            device="cuda",  # GPU 사용 권장
+            device="cuda",
         )
 
         self.base_splitter = SentenceSplitter(
             chunk_size=512,
             chunk_overlap=100,
             paragraph_separator="\n\n",
-            secondary_chunking_regex=r"[。.!?\n]",  # 한국어/영어 문장 경계
+            secondary_chunking_regex=r"[。.!?\n]",
         )
 
         self.semantic_splitter = SemanticSplitterNodeParser(
             buffer_size=1,
-            breakpoint_percentile_threshold=95,  # 95% 이상 차이 시 분할
+            breakpoint_percentile_threshold=95,
             embed_model=self.embed_model,
         )
 
@@ -177,7 +175,7 @@ class ChunkingProcess:
                 text=cleaned_text,
                 node_id=node.node_id,
                 metadata=node.metadata.copy(),
-                embedding=node.embedding,  # 기존 임베딩 유지
+                embedding=node.embedding,
             )
             filtered.append(clean_node)
 
@@ -204,7 +202,7 @@ class ChunkingProcess:
                 results = col.query(
                     expr=f"id in {ids_str}",
                     output_fields=["id"],
-                    limit=len(ids),  # 최대 반환 제한
+                    limit=len(ids),
                 )
                 existing_ids.update(r["id"] for r in results)
                 logger.info(
@@ -226,20 +224,11 @@ class ChunkingProcess:
             doc_dir, file_metadata=lambda x: {"file_name": os.path.basename(x)}
         ).load_data()
 
-        # print(f"documents: {documents}")
-
-        # doc_text = ""
-        # for doc in documents:
-        #     doc_text = doc_text + doc.text_resource.text
-
         base_nodes = self.base_splitter.get_nodes_from_documents(documents)
         logger.info(f"SentenceSplitter length → {len(base_nodes)}")
         semantic_nodes = self.semantic_splitter.get_nodes_from_documents(base_nodes)
         logger.info(f"SemanticSplitter length → {len(semantic_nodes)}")
         semantic_nodes = self.filter_meaningless_nodes(semantic_nodes)
-
-        # logger.info(f"semantic_nodes[0] → {semantic_nodes[0]}")
-        # logger.info(f"semantic_nodes[0].text → {semantic_nodes[0].text}")
 
         for i, node in enumerate(semantic_nodes):
             if not hasattr(node, "embedding") or node.embedding is None:
@@ -259,20 +248,10 @@ class ChunkingProcess:
                 self.vector_store.add(new_nodes)
                 self.vector_store._collection.flush()
                 logger.info(f"New insertions: {len(new_nodes)}")
-            # existing_ids = set(self.index.docstore.docs.keys())
-            # new_nodes = [n for n in semantic_nodes if n.node_id not in existing_ids]
-
-            # if new_nodes:
-            #     self.index.insert_nodes(new_nodes)
-            #     # extracted_extity = self.vllm.extract_entities(new_nodes)
-            #     # logger.info(f"extracted_extity: {extracted_extity}")
-            #     self.index.storage_context.persist(persist_dir=self.vector_persist_dir)
-            #     logger.info(f"Processing: New {len(new_nodes)}")
 
         logger.info(
             f"Existing index loading complete (number of nodes: {self.vector_store._collection.num_entities})"
         )
-        # index = VectorStoreIndex(semantic_nodes)
         logger.info(f"Complete generate index")
 
     def build_query_filters(self, filters: dict) -> MetadataFilters:
@@ -297,11 +276,10 @@ class ChunkingProcess:
             ],
         )
 
-        print(
+        logger.info(
             f"Retriever settings: top_k={top_k}, filter={filters}, cutoff={min_similarity}"
         )
 
-        # nodes = retriever.retrieve(query_str)
         query_bundle = QueryBundle(query_str)
         nodes_with_scores = retriever.retrieve(query_bundle)
         reranked_nodes = self.reranker_processor.postprocess_nodes(
@@ -351,7 +329,7 @@ class ChunkingProcess:
             #     )
             #     relation_list.append(rel_doc)
 
-        print(f"Search results: {len(nodes_with_scores)} nodes")
+        logger.info(f"Search results: {len(nodes_with_scores)} nodes")
 
         return results
 
@@ -375,16 +353,13 @@ if __name__ == "__main__":
         reranker_model_path=reranker_model_path,
     )
 
-    # processor.process_chucking(doc_dir=doc_dir)
-
-    query_str = "주주환원 촉진세제 이유는?"
+    query_str = "주주환원 촉진세제 삭제 이유는?"
     retirival_data = processor.query_retirival(query_str=query_str)
     logger.info(f"reranked: {len(retirival_data)}")
 
     context_str = ""
-    for r in retirival_data:  # 상위 2개 출력
+    for r in retirival_data:
         logger.info(f"Score: {r.score} | File: {r.file_name} | Page: {r.page_number}")
-        # print(f"Text: {r['text'][:200]}...\n")
         logger.info(f"Text: {r.text}\n")
         context_str = context_str + r.text
 

@@ -1,10 +1,9 @@
 from vllm import LLM, RequestOutput, SamplingParams
-import os
 import torch
 from dotenv import load_dotenv
 import re
 
-from server import getLogger
+from server import LLM_DTYPE, LLM_GPU_UTIL, LLM_MAX_MODEL_LEN, LLM_MODEL, getLogger
 
 load_dotenv()
 
@@ -52,19 +51,15 @@ class LlmVllm:
 
     def __init__(self):
         self.llm = LLM(
-            # model="/mnt/data2/models/vision/gemma-3n-E4B-it",
-            # model="/mnt/data2/models/llm/DeepSeek-R1-0528-Qwen3-8B",
-            model="/mnt/data2/models/vision/gemma-3-12b-it-FP8-dynamic",
-            # model="/mnt/data2/models/vision/Qwen3-VL-8B-Thinking-FP8",
-            # dtype="float16",
+            model=LLM_MODEL,
             # quantization="fp8",
             tensor_parallel_size=torch.cuda.device_count(),
-            gpu_memory_utilization=0.5,
+            gpu_memory_utilization=LLM_GPU_UTIL,
             # disable_custom_all_reduce=True,
-            dtype="bfloat16",
+            dtype=LLM_DTYPE,
             kv_cache_dtype="auto",
-            max_model_len=8192,  # max 131072 (128k)
-            max_num_batched_tokens=8192,
+            max_model_len=LLM_MAX_MODEL_LEN,  # max 131072 (128k)
+            max_num_batched_tokens=LLM_MAX_MODEL_LEN,
             max_num_seqs=4,
             block_size=16,
             enforce_eager=True,
@@ -74,9 +69,8 @@ class LlmVllm:
     def query(self, query_str="") -> list[RequestOutput]:
         params = SamplingParams(
             temperature=0.1,
-            max_tokens=8192,
+            max_tokens=LLM_MAX_MODEL_LEN,
             stop=["<|im_end|>", "</s>", "<|endoftext|>"],
-            # stop_token_ids=[self.llm.get_tokenizer().eos_token_id],
         )
         return self.llm.generate(query_str, params)
 
@@ -89,7 +83,7 @@ class LlmVllm:
         if text is None:
             return ""
         if not isinstance(text, str):
-            raise TypeError("입력은 문자열이어야 합니다.")
+            raise TypeError("Input must be a string.")
 
         cleaned = text
 
@@ -127,14 +121,8 @@ class LlmVllm:
         import json, re
 
         try:
-            # logger.info(f"extract_entities response: {response}")
-
             json_str = self.extract_json_block(text=response[0].outputs[0].text.strip())
-            # json_str = re.search(
-            #     r"\{.*\}",
-            #     self.extract_json_block(response[0].outputs[0].text),
-            #     re.DOTALL,
-            # ).group()
+
             return json.loads(json_str)
         except Exception as e:
             logger.warning(f"extract_entities Error {e}")
