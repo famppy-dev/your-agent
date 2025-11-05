@@ -1,13 +1,13 @@
 from pymilvus import MilvusClient
 
-from server import getLogger
 from server import (
+    MILVUS_ADMIN_TOKEN,
     MILVUS_COLLECTION_NAME,
-    MILVUS_URI,
     MILVUS_PASSWORD,
     MILVUS_ROLE_NAME,
+    MILVUS_URI,
     MILVUS_USERNAME,
-    MILVUS_ADMIN_TOKEN,
+    getLogger,
 )
 from server.db.client import (
     get_embedding_schema,

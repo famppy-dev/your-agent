@@ -1,8 +1,9 @@
 from typing import List
-from pydantic import ConfigDict
+
+from FlagEmbedding import FlagReranker
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.schema import NodeWithScore, QueryBundle
-from FlagEmbedding import FlagReranker
+from pydantic import ConfigDict
 
 
 class BGERerankPostprocessor(BaseNodePostprocessor):

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from server import getLogger
 from server.models.enums import AppErrorCode
 from server.models.response import ApiResponse, ErrorDetail
 
@@ -8,6 +9,8 @@ from .middleware import log, timeout
 from .routers import health
 
 app = FastAPI(title="Your Agent Middleware", version="0.1.0")
+
+logger = getLogger()
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,7 +31,8 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     if isinstance(exc.detail, dict):
         try:
             error_detail = ErrorDetail(**exc.detail)
-        except:
+        except Exception as e:
+            logger.error(f"http_exception_handler: {e}")
             error_detail = ErrorDetail(
                 error_code=AppErrorCode.INTERNAL, message=str(exc.detail)
             )
