@@ -1,6 +1,9 @@
+import asyncio
 from pathlib import Path
 
 from server import (
+    EMBED_MODEL,
+    EMBED_RERANK_MODEL,
     getLogger,
 )
 from server.llm.vllm import getLlm
@@ -12,38 +15,48 @@ logger = getLogger(__name__)
 
 class BasicChunkingProcess(ChunkingProcess):
 
-    def __init__(
-        self, model_id="BAAI/bge-m3", model_dir=None, reranker_model_path=None
-    ):
+    def __init__(self, model_id="BAAI/bge-m3", reranker_model_path=None):
 
-        super.__init__(
-            self,
+        super().__init__(
             model_id=model_id,
-            model_dir=model_dir,
             reranker_model_path=reranker_model_path,
         )
 
 
+chunking_process: BasicChunkingProcess | None = None
+async_lock = asyncio.Lock()
+initialized = False
+
+
+async def get_chunking_process() -> BasicChunkingProcess:
+    global chunking_process, initialized
+    if initialized:
+        return chunking_process
+
+    async with async_lock:
+        if initialized:
+            return chunking_process
+
+    chunking_process = BasicChunkingProcess(
+        model_id=EMBED_MODEL,
+        reranker_model_path=EMBED_RERANK_MODEL,
+    )
+
+    initialized = True
+    return chunking_process
+
+
 async def call_main():
-    llm = getLlm()
+    llm = await getLlm()
     script_dir = Path(__file__).parent.resolve()
-    embed_model_path = script_dir.parent.parent / "models" / "bge-m3"
-    # bge-reranker-v2.5-gemma2-lightweight , bge-reranker-v2-m3
-    reranker_model_path = script_dir.parent.parent / "models" / "bge-reranker-v2-m3"
     doc_dir = script_dir / "data"
 
     logger.info(f"doc_dir: {doc_dir}")
 
-    embedding_model_name = "BAAI/bge-m3"
-
-    processor = ChunkingProcess(
-        model_id=embedding_model_name,
-        model_dir=embed_model_path,
-        reranker_model_path=reranker_model_path,
-    )
+    processor = await get_chunking_process()
 
     query_str = "주주환원 촉진세제란 무엇인가?"
-    retirival_data = processor.query_retirival(query_str=query_str)
+    retirival_data = await processor.query_retirival(query_str=query_str)
     logger.info(f"reranked: {len(retirival_data)}")
 
     context_str = ""
@@ -54,8 +67,10 @@ async def call_main():
 
     response = await llm.query_rag(context_str=context_str, query_str=query_str)
 
-    logger.info(response[0].outputs[0].text)
+    logger.info(f"response: {response}")
+
+    logger.info(response.outputs[0].text)
 
 
 if __name__ == "__main__":
-    call_main()
+    asyncio.run(call_main())

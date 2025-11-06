@@ -165,17 +165,16 @@ class LlmVllm:
         """
         If you declare `prompt` directly, you need to declare two variables: `context_str` and `query_str`.
         """
-        return self.query(
+        return await self.query(
             RAG_PROMPT_TEMPLATE.format(context_str=context_str, query_str=query_str)
             if prompt is None
             else prompt.format(context_str=context_str, query_str=query_str)
         )
 
     async def extract_entities(self, text: str = None, prompt: str = None):
-        response = self.query(
+        response = await self.query(
             prompt if prompt is not None else EXTRACT_PROMPT.format(text=text)
         )
-        import json
 
         try:
             json_str = self._extract_json_block(
@@ -216,4 +215,4 @@ async def call_main():
 
 
 if __name__ == "__main__":
-    call_main()
+    asyncio.run(call_main())

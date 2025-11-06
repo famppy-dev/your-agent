@@ -55,11 +55,9 @@ class ChunkingResultData:
 
 class ChunkingProcess:
 
-    def __init__(
-        self, model_id="BAAI/bge-m3", model_dir=None, reranker_model_path=None
-    ):
+    def __init__(self, model_id="BAAI/bge-m3", reranker_model_path=None):
 
-        self.embed_model = self._init_embed_model(model_id, model_dir)
+        self.embed_model = self._init_embed_model(model_id)
 
         self.base_splitter = SentenceSplitter(
             chunk_size=512,
@@ -73,7 +71,10 @@ class ChunkingProcess:
             breakpoint_percentile_threshold=95,
             embed_model=self.embed_model,
         )
-        self.reranker_processor = self._init_reranker_processor(reranker_model_path)
+        if reranker_model_path is None:
+            logger.info("Not found reranker model")
+        else:
+            self.reranker_processor = self._init_reranker_processor(reranker_model_path)
         Settings.embed_model = self.embed_model
 
         self.vector_store = self._get_vector_store()
@@ -87,10 +88,9 @@ class ChunkingProcess:
             f"Existing index loading complete (number of nodes: {self.vector_store._collection.num_entities})"
         )
 
-    def _init_embed_model(self, model_id: str, model_dir: str):
+    def _init_embed_model(self, model_id: str):
         return HuggingFaceEmbedding(
             model_name=model_id,
-            cache_folder=model_dir,
             device="cuda",
         )
 
@@ -215,6 +215,9 @@ class ChunkingProcess:
                 error_code=AppErrorCode.INTERNAL, message=repr(e), details=None
             )
 
+    def get_text_embedding(self, text: str) -> List[float]:
+        return self.embed_model.get_text_embedding(text)
+
     def process_chucking(
         self, doc_dir: Path | str | None = None, input_files: list | None = None
     ):
@@ -245,7 +248,7 @@ class ChunkingProcess:
                 error_code=AppErrorCode.INTERNAL, message=repr(e), details=None
             )
 
-    def query_retirival(
+    async def query_retirival(
         self,
         query_str: str,
         top_k: int = 50,
@@ -268,12 +271,15 @@ class ChunkingProcess:
 
             query_bundle = QueryBundle(query_str)
             nodes_with_scores = retriever.retrieve(query_bundle)
-            reranked_nodes = self.reranker_processor.postprocess_nodes(
-                nodes_with_scores, query_bundle
-            )
+            if self.reranker_processor is not None:
+                reranked_nodes = self.reranker_processor.postprocess_nodes(
+                    nodes_with_scores, query_bundle
+                )
 
             results = []
-            for node_with_score in reranked_nodes:
+            for node_with_score in (
+                reranked_nodes if reranked_nodes is not None else nodes_with_scores
+            ):
                 node = node_with_score.node
 
                 result = ChunkingResultData(

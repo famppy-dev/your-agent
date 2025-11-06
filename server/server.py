@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -58,8 +60,9 @@ async def call_main():
     import uvicorn
 
     await getLlm()
+
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
 
 
 if __name__ == "__main__":
-    call_main()
+    asyncio.run(call_main())

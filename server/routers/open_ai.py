@@ -1,21 +1,34 @@
+import asyncio
+import base64
 import json
 import time
 import uuid
 from collections.abc import AsyncGenerator
+from concurrent.futures import ThreadPoolExecutor
 
+import numpy as np
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from server import getLogger
+from server.embedding.chunking import get_chunking_process
 from server.llm.vllm import getLlm
-from server.models.open_ai import ChatCompletionRequest
+from server.models.open_ai import (
+    ChatCompletionRequest,
+    EmbeddingData,
+    EmbeddingRequest,
+    EmbeddingResponse,
+)
 
 router = APIRouter(tags=["open-ai-compatiple"])
 
 logger = getLogger(__name__)
 
+_executor = ThreadPoolExecutor(max_workers=8)
+
 
 @router.post("/chat/completions")
+@router.post("/chat/completion")
 async def chat_completions(request: Request, userRequest: ChatCompletionRequest):
     completion_id = f"YourAgent-{uuid.uuid4()}"
 
@@ -126,3 +139,34 @@ async def chat_completions(request: Request, userRequest: ChatCompletionRequest)
     )
     logger.info(f"response: {payload}")
     return JSONResponse(payload)
+
+
+@router.post("/embeddings")
+@router.post("/embedding")
+async def embedding(request: Request, userRequest: EmbeddingRequest):
+    chunking_processor = await get_chunking_process()
+
+    texts = (
+        userRequest.input if isinstance(userRequest.input, str) else userRequest.input
+    )
+
+    loop = asyncio.get_event_loop()
+    embedding_datas = await loop.run_in_executor(
+        None,
+        lambda: chunking_processor.get_text_embedding(texts),
+    )
+
+    if userRequest.encoding_format == "base64":
+        embedding_datas = [
+            base64.b64encode(embedding_datas.astype(np.float32).tobytes()).decode()
+        ]
+
+    total_tokens = sum(len(t.split()) for t in texts)
+
+    data = [EmbeddingData(embedding=embedding_datas, index=0)]
+
+    return EmbeddingResponse(
+        data=data,
+        model=userRequest.model,
+        usage={"prompt_tokens": total_tokens, "total_tokens": total_tokens},
+    )
