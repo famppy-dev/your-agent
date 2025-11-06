@@ -1,6 +1,7 @@
 import logging
-from dotenv import load_dotenv
 import os
+
+from dotenv import load_dotenv
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,6 +25,7 @@ LLM_MODEL = os.getenv("LLM_MODEL")
 LLM_GPU_UTIL = os.getenv("LLM_GPU_UTIL")
 LLM_DTYPE = os.getenv("LLM_DTYPE")
 LLM_MAX_MODEL_LEN = int(os.getenv("LLM_MAX_MODEL_LEN"))
+LLM_BATCH_TOKEN_LEN = int(os.getenv("LLM_BATCH_TOKEN_LEN"))
 
 
 def getLogger(name: str) -> logging.Logger:

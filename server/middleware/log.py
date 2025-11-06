@@ -1,4 +1,5 @@
 import time
+import traceback
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -23,7 +24,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
 
         except Exception as e:
-            logger.error(f"Log Exception: {repr(e)}")
+            tb = traceback.format_exc()
+            logger.error(f"Log Exception: {tb}")
             response = ApiResponse.fail(
                 error_code=AppErrorCode.INTERNAL,
                 message=repr(e),
@@ -32,9 +34,12 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             )
 
         duration = time.perf_counter() - start_time
-        logger.info(
-            f"Response: {response.status_code} {request.method} {request.url} "
-            f"in {duration:.3f}s"
-        )
+        if hasattr(response, "status_code") and hasattr(response, "request"):
+            logger.info(
+                f"Response: {response.status_code} {request.method} {request.url} "
+                f"in {duration:.3f}s"
+            )
+        else:
+            logger.info(f"Response: {response}" f"in {duration:.3f}s")
 
         return response

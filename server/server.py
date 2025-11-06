@@ -2,15 +2,16 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from server import getLogger
+from server.llm.vllm import getLlm
 from server.models.enums import AppErrorCode
 from server.models.response import ApiResponse, ErrorDetail
 
 from .middleware import log, timeout
-from .routers import health
+from .routers import health, open_ai
 
 app = FastAPI(title="Your Agent Middleware", version="0.1.0")
 
-logger = getLogger()
+logger = getLogger(__name__)
 
 app.add_middleware(
     CORSMiddleware,
@@ -50,8 +51,15 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 
 app.include_router(health.router, prefix="/api/v1")
+app.include_router(open_ai.router, prefix="/v1")
 
-if __name__ == "__main__":
+
+async def call_main():
     import uvicorn
 
+    await getLlm()
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+
+
+if __name__ == "__main__":
+    call_main()

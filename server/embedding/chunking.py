@@ -24,8 +24,7 @@ class BasicChunkingProcess(ChunkingProcess):
         )
 
 
-if __name__ == "__main__":
-
+async def call_main():
     llm = getLlm()
     script_dir = Path(__file__).parent.resolve()
     embed_model_path = script_dir.parent.parent / "models" / "bge-m3"
@@ -53,6 +52,10 @@ if __name__ == "__main__":
         logger.info(f"Text: {r.text}\n")
         context_str = context_str + r.text
 
-    response = llm.query_rag(context_str=context_str, query_str=query_str)
+    response = await llm.query_rag(context_str=context_str, query_str=query_str)
 
     logger.info(response[0].outputs[0].text)
+
+
+if __name__ == "__main__":
+    call_main()

@@ -12,7 +12,7 @@ logger = getLogger(__name__)
 
 
 class TimeoutMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, timeout_seconds: int = 10):
+    def __init__(self, app, timeout_seconds: int = 60):
         super().__init__(app)
         self.timeout_seconds = timeout_seconds
 
