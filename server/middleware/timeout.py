@@ -12,7 +12,7 @@ logger = getLogger(__name__)
 
 
 class TimeoutMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, timeout_seconds: int = 60):
+    def __init__(self, app, timeout_seconds: int = 180):
         super().__init__(app)
         self.timeout_seconds = timeout_seconds
 
@@ -20,9 +20,8 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
         try:
             request_id = str(uuid.uuid4())
             request.state.request_id = request_id
-            return await asyncio.wait_for(
-                call_next(request), timeout=self.timeout_seconds
-            )
+            timeout = self.timeout_seconds
+            return await asyncio.wait_for(call_next(request), timeout=timeout)
         except TimeoutError:
             logger.warning(f"Timeout: {request.method} {request.url}")
             return ApiResponse.fail(

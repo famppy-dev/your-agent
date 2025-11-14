@@ -4,7 +4,6 @@ import json
 import time
 import uuid
 from collections.abc import AsyncGenerator
-from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 from fastapi import APIRouter, Request
@@ -23,8 +22,6 @@ from server.models.open_ai import (
 router = APIRouter(tags=["open-ai-compatiple"])
 
 logger = getLogger(__name__)
-
-_executor = ThreadPoolExecutor(max_workers=8)
 
 
 @router.post("/chat/completions")
@@ -45,9 +42,8 @@ async def chat_completions(request: Request, userRequest: ChatCompletionRequest)
         top_k=userRequest.top_k,
         request_id=completion_id,
         stream=userRequest.stream,
+        repetition_penalty=userRequest.repetition_penalty,
     )
-
-    prompt_tokens = len(response.prompt_token_ids)
 
     def build_choice(
         index: int, content: str = "", delta: str = "", finish_reason: str | None = None
@@ -64,9 +60,12 @@ async def chat_completions(request: Request, userRequest: ChatCompletionRequest)
     def build_payload(
         full_text: str,
         completion_tokens: int,
+        delta: str | None = None,
         finish_reason: str = "stop",
         is_chunk: bool = False,
         tps: float | None = None,
+        run_time: float | None = None,
+        prompt_tokens: int = 0,
     ):
         payload = {
             "id": completion_id,
@@ -74,10 +73,13 @@ async def chat_completions(request: Request, userRequest: ChatCompletionRequest)
             "created": created if not is_chunk else int(time.time()),
             "model": userRequest.model,
             "choices": [
-                build_choice(0, content=full_text, finish_reason=finish_reason)
+                build_choice(
+                    0, content=full_text, delta=delta, finish_reason=finish_reason
+                )
             ],
         }
-        if not is_chunk:
+        # if not is_chunk:
+        if finish_reason is not None:
             payload["usage"] = {
                 "prompt_tokens": prompt_tokens,
                 "completion_tokens": completion_tokens,
@@ -85,38 +87,43 @@ async def chat_completions(request: Request, userRequest: ChatCompletionRequest)
             }
             if tps is not None:
                 payload["usage"]["tps"] = round(tps, 2)
+            if run_time is not None:
+                payload["usage"]["run_time"] = round(run_time, 2)
         return payload
 
     if userRequest.stream:
 
         async def stream_results() -> AsyncGenerator[bytes, None]:
             full_text = ""
+            prompt_tokens = 0
             async for output in response:
                 new_text = output.outputs[0].text
                 delta = new_text[len(full_text) :]
                 full_text = new_text
                 completion_tokens = len(output.outputs[0].token_ids)
+                if prompt_tokens < 1:
+                    prompt_tokens = len(output.prompt_token_ids)
 
                 if delta:
+                    is_finished = output.outputs[0].finish_reason is not None
+                    elapsed = time.time() - start_time
+                    tps = completion_tokens / elapsed if elapsed > 0 else 0.0
                     chunk = build_payload(
-                        full_text="", completion_tokens=0, is_chunk=True
+                        full_text="",
+                        delta=delta,
+                        completion_tokens=completion_tokens,
+                        is_chunk=True,
+                        tps=tps,
+                        finish_reason=output.outputs[0].finish_reason,
+                        prompt_tokens=prompt_tokens,
                     )
-                    chunk["choices"][0]["delta"] = {"content": delta}
-                    chunk["choices"][0]["finish_reason"] = None
-                    logger.info(f"chunk: {chunk}")
                     yield f"data: {json.dumps(chunk)}\n\n"
 
-            elapsed = time.time() - start_time
-            tps = completion_tokens / elapsed if elapsed > 0 else 0.0
-
-            final_payload = build_payload(
-                full_text=full_text,
-                completion_tokens=completion_tokens,
-                finish_reason="stop",
-                tps=tps,
-            )
-            yield f"data: {json.dumps(final_payload)}\n\n"
-            yield "data: [DONE]\n\n"
+                    if is_finished:
+                        logger.info(
+                            f"chunk final: \n{full_text}\n{json.dumps(chunk['usage'])}"
+                        )
+                        yield "data: [DONE]\n\n"
 
         return StreamingResponse(
             stream_results(),
@@ -127,6 +134,7 @@ async def chat_completions(request: Request, userRequest: ChatCompletionRequest)
             },
         )
 
+    prompt_tokens = len(response.prompt_token_ids)
     response_text = response.outputs[0].text
     completion_tokens = len(response.outputs[0].token_ids)
     elapsed = time.time() - start_time
@@ -134,8 +142,9 @@ async def chat_completions(request: Request, userRequest: ChatCompletionRequest)
     payload = build_payload(
         full_text=response_text,
         completion_tokens=completion_tokens,
-        finish_reason="stop",
+        finish_reason=response.outputs[0].finish_reason,
         tps=tps,
+        prompt_tokens=prompt_tokens,
     )
     logger.info(f"response: {payload}")
     return JSONResponse(payload)
@@ -155,6 +164,7 @@ async def embedding(request: Request, userRequest: EmbeddingRequest):
         None,
         lambda: chunking_processor.get_text_embedding(texts),
     )
+    dimensions = len(embedding_datas)
 
     if userRequest.encoding_format == "base64":
         embedding_datas = [
@@ -168,5 +178,6 @@ async def embedding(request: Request, userRequest: EmbeddingRequest):
     return EmbeddingResponse(
         data=data,
         model=userRequest.model,
+        dimensions=dimensions,
         usage={"prompt_tokens": total_tokens, "total_tokens": total_tokens},
     )

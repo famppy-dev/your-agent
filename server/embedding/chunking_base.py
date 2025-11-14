@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List
@@ -15,6 +16,7 @@ from llama_index.core.postprocessor import SimilarityPostprocessor
 from llama_index.core.schema import (
     BaseNode,
     Document,
+    ImageNode,
     MetadataMode,
     QueryBundle,
     TextNode,
@@ -23,6 +25,7 @@ from llama_index.core.vector_stores import ExactMatchFilter, MetadataFilters
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.milvus import MilvusVectorStore
 from pymilvus import MilvusException
+from transformers import AutoModel, AutoProcessor
 
 from server import (
     MILVUS_COLLECTION_NAME,
@@ -35,6 +38,7 @@ from server import (
     MILVUS_VECTOR_DIM,
     getLogger,
 )
+from server.llm.vlm import getVlm
 from server.models.enums import AppErrorCode
 from server.models.response import ErrorDetail
 
@@ -55,9 +59,19 @@ class ChunkingResultData:
 
 class ChunkingProcess:
 
-    def __init__(self, model_id="BAAI/bge-m3", reranker_model_path=None):
-
+    def __init__(
+        self,
+        model_id="BAAI/bge-m3",
+        model_img_id=None,
+        reranker_model_path=None,
+    ):
+        self.device = "cuda"
         self.embed_model = self._init_embed_model(model_id)
+        logger.info(f"model_img_id: {model_img_id}")
+        if model_img_id is not None:
+            self.embed_img_model, self.embed_img_model_processor = (
+                self._init_embed_img_model(model_img_id)
+            )
 
         self.base_splitter = SentenceSplitter(
             chunk_size=512,
@@ -91,8 +105,17 @@ class ChunkingProcess:
     def _init_embed_model(self, model_id: str):
         return HuggingFaceEmbedding(
             model_name=model_id,
-            device="cuda",
+            device=self.device,
         )
+
+    def _init_embed_img_model(self, model_id: str):
+        processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
+        model = AutoModel.from_pretrained(
+            model_id, trust_remote_code=True, device_map="auto"
+        )
+        model.eval()
+        logger.info(f"Load complete SigLIP2 : {model_id}")
+        return model, processor
 
     def _init_reranker_processor(self, reranker_model_path: str):
         return BGERerankPostprocessor(reranker_model_path=reranker_model_path, top_k=10)
@@ -106,6 +129,7 @@ class ChunkingProcess:
             pk_field=MILVUS_PK_FIELD,
             embedding_field=MILVUS_EMBEDDING_FIELD,
             text_field=MILVUS_TEXT_FIELD,
+            additional_vector_fields={"img_vector": "img_vector"},
             enable_upsert=True,
             overwrite=False,
         )
@@ -194,10 +218,36 @@ class ChunkingProcess:
             llama_filters.append(ExactMatchFilter(key=key, value=value))
         return MetadataFilters(filters=llama_filters)
 
-    def _split_by_node(self, documents=List[Document]) -> List[BaseNode]:
+    async def _process_img_node(self, nodes: List[BaseNode]):
+        llm = await getVlm()
+        for i, node in enumerate(nodes):
+            if (
+                isinstance(node, ImageNode)
+                and self.embed_img_model_processor is not None
+            ):
+                inputs = self.embed_img_model_processor(
+                    images=[node.image_path], return_tensors="pt", padding=True
+                )
+                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+                input_embedding = (
+                    self.embed_img_model.get_image_features(**inputs).cpu().tolist()
+                )
+                node.metadata = {**node.metadata, "img_vector": input_embedding[0]}
+
+                if llm is not None:
+                    node.text = await llm.describe_image(node.image_path)
+                # node.embedding = input_embedding[0]
+        return nodes
+
+    async def _split_by_node(self, documents=List[Document]) -> List[BaseNode]:
         try:
             base_nodes = self.base_splitter.get_nodes_from_documents(documents)
             logger.info(f"SentenceSplitter length → {len(base_nodes)}")
+            logger.info(f"SentenceSplitter base_nodes → {base_nodes}")
+
+            base_nodes = await self._process_img_node(base_nodes)
+
+            logger.info(f"SentenceSplitter after img base_nodes → {base_nodes}")
             semantic_nodes = self.semantic_splitter.get_nodes_from_documents(base_nodes)
             logger.info(f"SemanticSplitter length → {len(semantic_nodes)}")
             semantic_nodes = self._filter_meaningless_nodes(semantic_nodes)
@@ -210,7 +260,8 @@ class ChunkingProcess:
 
             return semantic_nodes
         except Exception as e:
-            logger.error(f"_split_by_node error: {e}")
+            tb = traceback.format_exc()
+            logger.error(f"_split_by_node error: {tb}")
             raise ErrorDetail(
                 error_code=AppErrorCode.INTERNAL, message=repr(e), details=None
             )
@@ -218,7 +269,7 @@ class ChunkingProcess:
     def get_text_embedding(self, text: str) -> List[float]:
         return self.embed_model.get_text_embedding(text)
 
-    def process_chucking(
+    async def process_chucking(
         self, doc_dir: Path | str | None = None, input_files: list | None = None
     ):
         try:
@@ -228,7 +279,9 @@ class ChunkingProcess:
                 file_metadata=lambda x: {"file_name": os.path.basename(x)},
             ).load_data()
 
-            nodes = self._split_by_node(documents)
+            logger.info(f"documents: {documents}")
+
+            nodes = await self._split_by_node(documents)
 
             if nodes:
                 existing_ids = self._safe_query_existing_ids(nodes)

@@ -1,13 +1,10 @@
 import asyncio
-import json
-import re
-import time
 from collections.abc import AsyncGenerator
 from typing import List, Sequence
 
 import torch
 from dotenv import load_dotenv
-from fastapi.responses import StreamingResponse
+from transformers import AutoTokenizer
 from vllm import AsyncLLMEngine, PromptType, RequestOutput, SamplingParams
 from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.usage.usage_lib import UsageContext
@@ -20,6 +17,7 @@ from server import (
     LLM_MODEL,
     getLogger,
 )
+from server.llm.param_util import convert_to_llm_string
 from server.llm.prompts import EXTRACT_PROMPT, RAG_PROMPT_TEMPLATE
 from server.models.enums import AppErrorCode
 from server.models.open_ai import Message
@@ -36,6 +34,7 @@ class LlmVllm:
         args = AsyncEngineArgs(
             model=LLM_MODEL,
             # quantization="fp8",
+            # quantization="fp4",
             tensor_parallel_size=torch.cuda.device_count(),
             gpu_memory_utilization=LLM_GPU_UTIL,
             # disable_custom_all_reduce=True,
@@ -47,75 +46,13 @@ class LlmVllm:
             block_size=16,
             enforce_eager=True,
             enable_chunked_prefill=True,
+            limit_mm_per_prompt={"image": 5},
+            mm_processor_kwargs={"do_pan_and_scan": False},
         )
         self.llm = AsyncLLMEngine.from_engine_args(
             args, usage_context=UsageContext.API_SERVER
         )
-
-    def _extract_json_block(self, text: str) -> str:
-        if text is None:
-            return ""
-        if not isinstance(text, str):
-            raise TypeError("Input must be a string.")
-
-        cleaned = text
-
-        close_matches = list(
-            re.finditer(r"</think(?:ing)?>", cleaned, flags=re.IGNORECASE)
-        )
-        if close_matches:
-            last_close = close_matches[-1]
-            cleaned = cleaned[last_close.end() :].lstrip()
-
-        cleaned = re.sub(
-            r"<think(?:ing)?>.*?</think(?:ing)?>",
-            "",
-            cleaned,
-            flags=re.DOTALL | re.IGNORECASE,
-        ).strip()
-
-        pattern = r"```(?:json)?\s*(.*?)\s*```"
-        match = re.search(pattern, cleaned, re.DOTALL)
-
-        if match:
-            json_str = match.group(1).strip()
-        else:
-            if cleaned.startswith("```") and cleaned.endswith("```"):
-                json_str = cleaned[3:-3].strip()
-            else:
-                json_str = cleaned
-
-        if not json_str:
-            return ""
-        return json_str
-
-    def _convert_to_llm_string(
-        self,
-        messages: PromptType | Sequence[PromptType] | List[Message],
-    ) -> str:
-        if isinstance(messages, list):
-            try:
-                # 모든 요소가 Message 인지 간단히 검사
-                if all(isinstance(m, Message) for m in messages):
-                    parts = []
-                    for msg in messages:
-                        role = msg.role.capitalize()
-                        if isinstance(msg.content, str):
-                            parts.append(f"[{role}] {msg.content}")
-                        else:
-                            texts = [p.text for p in msg.content if p.type == "text"]
-                            images = [p.image for p in msg.content if p.type == "image"]
-                            text = " ".join(texts) if texts else ""
-                            img_str = " ".join(f"[Image: {url}]" for url in images)
-                            combined = f"{text} {img_str}".strip()
-                            parts.append(f"[{role}] {combined}")
-                    return "\n".join(parts)
-            except Exception as e:
-                return f"[ERROR: failed convert] {e}"
-
-        if isinstance(messages, (str, dict, list)):
-            return str(messages)
-        return repr(messages)
+        self.tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL)
 
     async def query(
         self,
@@ -127,6 +64,7 @@ class LlmVllm:
         top_k: int = 0,
         request_id: str = "",
         stream: bool = False,
+        repetition_penalty=1.0,
     ) -> RequestOutput | AsyncGenerator[RequestOutput, None] | None:
         params = SamplingParams(
             temperature=temperature,
@@ -134,9 +72,27 @@ class LlmVllm:
             stop=stop,
             top_p=top_p,
             top_k=top_k,
+            skip_special_tokens=False,
+            repetition_penalty=repetition_penalty,
         )
+        convert_prompt, img_parts = convert_to_llm_string(query_str)
+
+        logger.info(f"convert_prompt: {convert_prompt}, img_parts: {img_parts}")
+
+        if len(img_parts) > 0:
+            prompts = (
+                {
+                    "prompt": convert_prompt,
+                    "multi_modal_data": {
+                        "image": img_parts if len(img_parts) > 1 else img_parts[0]
+                    },
+                },
+            )
+        else:
+            prompts = convert_prompt
+
         results_generator = self.llm.generate(
-            prompt=self._convert_to_llm_string(query_str),
+            prompt=prompts,
             sampling_params=params,
             request_id=request_id,
         )
@@ -171,20 +127,12 @@ class LlmVllm:
             else prompt.format(context_str=context_str, query_str=query_str)
         )
 
-    async def extract_entities(self, text: str = None, prompt: str = None):
-        response = await self.query(
-            prompt if prompt is not None else EXTRACT_PROMPT.format(text=text)
+    async def extract_entities(
+        self, text: str | None = None, prompt: str | None = None
+    ):
+        return await self.query(
+            EXTRACT_PROMPT.format(text=text) if prompt is None else prompt
         )
-
-        try:
-            json_str = self._extract_json_block(
-                text=response[0].outputs[0].text.strip()
-            )
-
-            return json.loads(json_str)
-        except Exception as e:
-            logger.warning(f"extract_entities Error {e}")
-            return {"entities": [], "relations": []}
 
 
 llm: LlmVllm | None = None

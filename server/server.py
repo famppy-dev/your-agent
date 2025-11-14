@@ -1,6 +1,7 @@
 import asyncio
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
 from server import getLogger
@@ -9,9 +10,22 @@ from server.models.enums import AppErrorCode
 from server.models.response import ApiResponse, ErrorDetail
 
 from .middleware import log, timeout
-from .routers import health, open_ai
+from .routers import health, open_ai, rag
 
-app = FastAPI(title="Your Agent Middleware", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("FastAPI initializing...")
+
+    await getLlm()
+
+    print("FastAPI initialize complete !!")
+    yield
+
+    pass
+
+
+app = FastAPI(lifespan=lifespan, title="Your Agent Middleware", version="0.1.0")
 
 logger = getLogger(__name__)
 
@@ -53,16 +67,16 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 
 app.include_router(health.router, prefix="/api/v1")
+app.include_router(rag.router, prefix="/v1/rag")
 app.include_router(open_ai.router, prefix="/v1")
 
 
-async def call_main():
+async def boot():
     import uvicorn
 
-    await getLlm()
-
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+    # uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
 
 
 if __name__ == "__main__":
-    asyncio.run(call_main())
+    asyncio.run(boot())

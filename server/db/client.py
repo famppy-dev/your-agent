@@ -1,11 +1,13 @@
 from pymilvus import DataType, MilvusClient
-from server import getLogger
+
 from server import (
     MILVUS_EMBEDDING_FIELD,
+    MILVUS_EMBEDDING_IMG_FIELD,
     MILVUS_PASSWORD,
     MILVUS_TEXT_FIELD,
     MILVUS_URI,
     MILVUS_USERNAME,
+    getLogger,
 )
 
 logger = getLogger(__name__)
@@ -43,6 +45,9 @@ def get_embedding_schema():
     )
     schema.add_field(
         field_name=MILVUS_TEXT_FIELD, datatype=DataType.VARCHAR, max_length=65535
+    )
+    schema.add_field(
+        field_name=MILVUS_EMBEDDING_IMG_FIELD, datatype=DataType.FLOAT_VECTOR, dim=768
     )
     schema.add_field(field_name="file_name", datatype=DataType.VARCHAR, max_length=256)
     return schema

@@ -36,6 +36,14 @@ def gen_schema(client: MilvusClient):
         params={"M": 16, "efConstruction": 200},
     )
 
+    index_params.add_index(
+        field_name="img_vector",
+        metric_type="L2",
+        index_type="HNSW",
+        index_name="img_vector_index",
+        params={"M": 16, "efConstruction": 200},
+    )
+
     client.create_index(
         collection_name=MILVUS_COLLECTION_NAME,
         index_params=index_params,
