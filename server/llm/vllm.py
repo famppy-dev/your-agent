@@ -31,8 +31,12 @@ logger = getLogger(__name__)
 class LlmVllm:
 
     def __init__(self):
+
+        self.tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL)
+
         args = AsyncEngineArgs(
             model=LLM_MODEL,
+            # tokenizer=self.tokenizer,
             # quantization="fp8",
             # quantization="fp4",
             tensor_parallel_size=torch.cuda.device_count(),
@@ -52,7 +56,6 @@ class LlmVllm:
         self.llm = AsyncLLMEngine.from_engine_args(
             args, usage_context=UsageContext.API_SERVER
         )
-        self.tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL)
 
     async def query(
         self,
@@ -73,26 +76,37 @@ class LlmVllm:
             top_p=top_p,
             top_k=top_k,
             skip_special_tokens=False,
+            stop_token_ids=[self.tokenizer.eos_token_id],
             repetition_penalty=repetition_penalty,
         )
-        convert_prompt, img_parts = convert_to_llm_string(query_str)
 
-        logger.info(f"convert_prompt: {convert_prompt}, img_parts: {img_parts}")
+        prompt_tokenized = self.tokenizer.apply_chat_template(
+            query_str,
+            tokenize=True,
+            add_generation_prompt=True,  # assistant 프롬프트 추가
+            return_tensors="pt",
+        )
 
-        if len(img_parts) > 0:
-            prompts = (
-                {
-                    "prompt": convert_prompt,
-                    "multi_modal_data": {
-                        "image": img_parts if len(img_parts) > 1 else img_parts[0]
-                    },
-                },
-            )
-        else:
-            prompts = convert_prompt
+        # convert_prompt, img_parts = convert_to_llm_string(query_str)
+
+        # logger.info(f"convert_prompt: {convert_prompt}, img_parts: {img_parts}")
+
+        # if len(img_parts) > 0:
+        #     prompts = (
+        #         {
+        #             "prompt": convert_prompt,
+        #             "multi_modal_data": {
+        #                 "image": img_parts if len(img_parts) > 1 else img_parts[0]
+        #             },
+        #         },
+        #     )
+        # else:
+        #     prompts = convert_prompt
 
         results_generator = self.llm.generate(
-            prompt=prompts,
+            prompt={
+                "prompt_token_ids": prompt_tokenized[0].tolist(),
+            },
             sampling_params=params,
             request_id=request_id,
         )
@@ -130,9 +144,21 @@ class LlmVllm:
     async def extract_entities(
         self, text: str | None = None, prompt: str | None = None
     ):
-        return await self.query(
-            EXTRACT_PROMPT.format(text=text) if prompt is None else prompt
-        )
+        messages = [
+            {
+                "role": "system",
+                "content": [
+                    {"type": "text", "text": EXTRACT_PROMPT},
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": text if prompt is None else prompt},
+                ],
+            },
+        ]
+        return await self.query(messages)
 
 
 llm: LlmVllm | None = None

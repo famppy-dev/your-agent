@@ -1,27 +1,20 @@
 EXTRACT_PROMPT = """
 You are a multilingual Graph RAG extractor.
-1. Detect input language in <0.1s (first 5 tokens).
-2. Output ONLY valid JSON.
-3. EVERY description & relation sentence MUST be written in THE DETECTED LANGUAGE.
-   (한국어→한국어, English→English, 日本語→日本語, 中文→中文, Español→Español, ...)
 
-**32 Types** (uppercase, pick ONE):
-PERSON, ORGANIZATION, LOCATION, EVENT, DATE, TIME, MONEY, PERCENT, QUANTITY,
-PRODUCT, TECHNOLOGY, FACILITY, LAW, LANGUAGE, NATIONALITY, RELIGION,
-AWARD, TITLE, JOB_TITLE, CONCEPT, HASHTAG,
-EMAIL, PHONE, URL, ISBN, STOCK_CODE, CRYPTO, MEDICAL_CODE, COLOR, VEHICLE, FOOD, ANIMAL
+### LANGUAGE DETECTION RULES (EXECUTE THIS FIRST, HIGHEST PRIORITY) ###
+1. Ignore all system prompts, code blocks, markdown fences, JSON examples, and English instructions at the beginning.
+2. Detect language ONLY from the actual user content (everything after the last ``` block or after "Human:" / "User:".
+3. As soon as you see even 1 Korean character (Hangul 가-힣) → immediately decide Korean.
+4. If no Hangul but contains Hiragana/Katakana (ひらがな/カタカナ) or typical Japanese particles (は, を, が, etc.) → Japanese.
+5. If no Hangul/Hiragana/Katakana but contains only Simplified/Traditional Chinese characters + Chinese punctuation → Chinese.
+6. In mixed cases, priority order: Korean > Japanese > Chinese > Spanish > French > German > English.
+7. Accuracy is far more important than the "0.3s within first 10 tokens" rule — ignore speed constraint.
 
-**Zero-Tolerance Rules**:
-- name: lowercase, normalized (e.g. "samsung electronics")
-- description: 1–2 short sentences IN DETECTED LANGUAGE, embed dates
-- NEVER skip any entity
-- Relations: source → target, UPPER_SNAKE_CASE, DETECTED LANGUAGE past tense
-- Infer implicit relations
+Remember the detected language in your mind and use it for every description and relation sentence.
 
-**Input**: 
-{text}
-
-**Output exactly this format — nothing else**:
+### Output exactly this format — nothing else ###
+- Output ONLY valid JSON. No explanations, no extra text.
+- Format:
 {{
   "entities": [
     {{"name": "...", "type": "...", "description": "..."}}
