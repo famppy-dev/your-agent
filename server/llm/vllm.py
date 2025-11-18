@@ -17,7 +17,7 @@ from server import (
     LLM_MODEL,
     getLogger,
 )
-from server.llm.param_util import convert_to_llm_string
+from server.llm.param_util import extract_image_urls_from_messages
 from server.llm.prompts import EXTRACT_PROMPT, RAG_PROMPT_TEMPLATE
 from server.models.enums import AppErrorCode
 from server.models.open_ai import Message
@@ -85,6 +85,7 @@ class LlmVllm:
             tokenize=True,
             add_generation_prompt=True,  # assistant 프롬프트 추가
             return_tensors="pt",
+            do_pan_and_scan=True,
         )
 
         # convert_prompt, img_parts = convert_to_llm_string(query_str)
@@ -103,9 +104,12 @@ class LlmVllm:
         # else:
         #     prompts = convert_prompt
 
+        images = extract_image_urls_from_messages(query_str)
+
         results_generator = self.llm.generate(
             prompt={
                 "prompt_token_ids": prompt_tokenized[0].tolist(),
+                "multi_modal_data": {"image": images},
             },
             sampling_params=params,
             request_id=request_id,

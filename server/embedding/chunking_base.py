@@ -38,7 +38,9 @@ from server import (
     MILVUS_VECTOR_DIM,
     getLogger,
 )
-from server.llm.vlm import getVlm
+from server.llm.param_util import image_to_base64_data_uri
+from server.llm.prompts.img_caption import IMG_CAPTION_PROMPT
+from server.llm.vllm import getLlm
 from server.models.enums import AppErrorCode
 from server.models.response import ErrorDetail
 
@@ -219,7 +221,7 @@ class ChunkingProcess:
         return MetadataFilters(filters=llama_filters)
 
     async def _process_img_node(self, nodes: List[BaseNode]):
-        llm = await getVlm()
+        llm = await getLlm()
         for i, node in enumerate(nodes):
             if (
                 isinstance(node, ImageNode)
@@ -235,8 +237,30 @@ class ChunkingProcess:
                 node.metadata = {**node.metadata, "img_vector": input_embedding[0]}
 
                 if llm is not None:
-                    node.text = await llm.describe_image(node.image_path)
-                # node.embedding = input_embedding[0]
+                    # When using vision llm separately
+                    # node.text = await llm.describe_image(node.image_path)
+                    img = image_to_base64_data_uri(node.image_path)
+                    messages = [
+                        {
+                            "role": "system",
+                            "content": [
+                                {"type": "text", "text": IMG_CAPTION_PROMPT},
+                            ],
+                        },
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image",
+                                    "url": img,
+                                },
+                            ],
+                        },
+                    ]
+                    response = await llm.query(
+                        messages, temperature=0.2, top_p=0.95, top_k=50
+                    )
+                    node.text = response.outputs[0].text.strip()
         return nodes
 
     async def _split_by_node(self, documents=List[Document]) -> List[BaseNode]:

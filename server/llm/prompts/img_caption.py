@@ -1,7 +1,1 @@
-IMG_CAPTION_PROMPT = """You are an expert image analyst for RAG systems. 
-Describe the image in English with maximum detail for retrieval. 
-Include all numbers, labels, colors, chart type, and relationships.
-
-Answer in plain English only. Do not use JSON or any formatting.
-
-"""
+IMG_CAPTION_PROMPT = """Describe the image in extreme detail in English only, optimized for retrieval in RAG systems. Include every visible text, number, label, color, exact chart type, axis titles, legend entries, data point values, trends, relationships between elements, layout, icons, logos, and any other distinguishing features. Output nothing except the plain English description itself. Do not add any introductory phrases, headers, JSON, markdown, or formatting. detailed but factual description."""

@@ -110,3 +110,17 @@ def image_to_base64(img: Image) -> str:
     img.save(buffered, format=img_format)
     img_str = base64.b64encode(buffered.getvalue()).decode()  # noqa: F821
     return f"data:image/{img_format.lower()};base64,{img_str}"
+
+
+def extract_image_urls_from_messages(messages):
+    image_urls = []
+
+    for message in messages:
+        if "content" in message and isinstance(message["content"], list):
+            for item in message["content"]:
+                if isinstance(item, dict) and item.get("type") == "image":
+                    url = item.get("url")
+                    if url:
+                        image_urls.append(url)
+
+    return image_urls
