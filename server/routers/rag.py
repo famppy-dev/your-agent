@@ -37,7 +37,7 @@ async def chunking(request: Request, userRequest: RagGraphRequest):
 
     return ApiResponse.success(
         data={
-            "text": response_text,
+            "text": json.dumps(response_text),
             "usage": {
                 "prompt_tokens": prompt_tokens,
                 "completion_tokens": completion_tokens,

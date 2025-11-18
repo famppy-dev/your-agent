@@ -148,21 +148,31 @@ class LlmVllm:
     async def extract_entities(
         self, text: str | None = None, prompt: str | None = None
     ):
-        messages = [
-            {
-                "role": "system",
-                "content": [
-                    {"type": "text", "text": EXTRACT_PROMPT},
-                ],
-            },
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": text if prompt is None else prompt},
-                ],
-            },
-        ]
-        return await self.query(messages)
+        prompts = (
+            prompt
+            if prompt is not None
+            else (
+                [
+                    {
+                        "role": "system",
+                        "content": [
+                            {"type": "text", "text": EXTRACT_PROMPT},
+                        ],
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": text if prompt is None else prompt,
+                            },
+                        ],
+                    },
+                ]
+            )
+        )
+
+        return await self.query(prompts)
 
 
 llm: LlmVllm | None = None
