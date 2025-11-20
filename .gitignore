@@ -4,6 +4,6 @@ __pycache__
 *.pyc
 test.api.http
 server/embedding/data
-models/
+./models/
 server/embedding/storage
 .scanoss/
