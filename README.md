@@ -67,7 +67,7 @@ with requests.post("http://localhost:8000/v1/chat/completions", json={
     print(f"Result:\n{full_text}\n\nUsage:\n\n{result['usage']}")
 ```
 
-### Basic call for embedding files
+### Basic call for embedding text
 ```python
 import requests
 
@@ -93,5 +93,32 @@ with open("sample.pdf", "rb") as f:
             print(f"Result: \n{result['data']}")
         else:
             print(f"Result: \n{result['error']}")
+
+```
+
+### Basic call for Retrieval
+```python
+import json
+
+import requests
+
+url = "http://localhost:8000/v1/chat/completions"
+headers = {"Content-Type": "application/json"}
+data = {
+    "model": "local",
+    "messages": [
+        {
+            "role": "user",
+            "content": msg,
+        }
+    ],
+    "is_rag": True,
+}
+
+with requests.post(url, json=data, headers=headers, stream=stream) as response:
+    response.raise_for_status()
+    result = response.json()
+    full_text = result["choices"][0]["message"]["content"]
+    print(f"Result:\n{full_text}\n\nUsage:\n\n{result['usage']}")
 
 ```
