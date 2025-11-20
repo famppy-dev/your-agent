@@ -2,6 +2,14 @@ version: '3.5'
 
 services:
 
+  your-agent:
+    build: ./
+    volumes:
+      - /mnt/data2/your-agent/models:/home/app/models
+      - /mnt/data2/models/vision:/home/app/vision
+      - .env-prod:/home/app/.env
+    ports:
+      - "8000:8000"
   attu:
     container_name: attu
     image: zilliz/attu:v2.6
