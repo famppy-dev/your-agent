@@ -53,7 +53,7 @@ import json
 import requests
 
 with requests.post("http://localhost:8000/v1/chat/completions", json={
-    "model": "gemma3",
+    "model": "local",
     "messages": [
         {
             "role": "user",
@@ -65,4 +65,33 @@ with requests.post("http://localhost:8000/v1/chat/completions", json={
     result = response.json()
     full_text = result["choices"][0]["message"]["content"]
     print(f"Result:\n{full_text}\n\nUsage:\n\n{result['usage']}")
+```
+
+### Basic call for embedding files
+```python
+import requests
+
+with requests.post("http://localhost:8000/v1/embedding", json={"model": "local", "input": msg}, headers={"Content-Type": "application/json"}) as response:
+    response.raise_for_status()
+    result = response.json()
+    print(result)
+```
+
+### Basic call for embedding files
+```python
+import requests
+
+with open("sample.pdf", "rb") as f:
+    files = {"file": f}
+
+    with requests.post("http://localhost:8000/v1/rag/embedding", files=files) as response:
+        response.raise_for_status()
+
+        result = response.json()
+
+        if result["result"] == 200:
+            print(f"Result: \n{result['data']}")
+        else:
+            print(f"Result: \n{result['error']}")
+
 ```
