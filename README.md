@@ -42,6 +42,11 @@ uv sync
 python -m server.db.init_db
 ```
 
+### Start server
+```sh
+./start.sh
+```
+
 ### Basic call (OpenAI Compatible)
 ```python
 import json
