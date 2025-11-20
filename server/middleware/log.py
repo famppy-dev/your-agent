@@ -20,7 +20,6 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         logger.info(f"Request: {request.method} {request.url} from {client_ip}")
 
         try:
-
             response = await call_next(request)
 
         except Exception as e:
@@ -40,6 +39,5 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 f"in {duration:.3f}s"
             )
         else:
-            logger.info(f"Response: {response}" f"in {duration:.3f}s")
-
+            logger.info(f"Response: {response}in {duration:.3f}s")
         return response

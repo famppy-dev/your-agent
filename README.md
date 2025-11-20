@@ -33,10 +33,31 @@ Setting up a virtual environment
 ```sh
 uv venv .venv
 source .venv/bin/activate 
+uv sync 
 ```
 
 ### DB initialization
 
 ```sh
-python init_db.py
+python -m server.db.init_db
+```
+
+### Basic call (OpenAI Compatible)
+```python
+import json
+import requests
+
+with requests.post("http://localhost:8000/v1/chat/completions", json={
+    "model": "gemma3",
+    "messages": [
+        {
+            "role": "user",
+            "content": msg,
+        }
+    ]
+}, headers={"Content-Type": "application/json"}, stream=stream) as response:
+    response.raise_for_status()
+    result = response.json()
+    full_text = result["choices"][0]["message"]["content"]
+    print(f"Result:\n{full_text}\n\nUsage:\n\n{result['usage']}")
 ```

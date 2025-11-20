@@ -19,6 +19,7 @@ from server import (
 )
 from server.llm.param_util import extract_image_urls_from_messages
 from server.llm.prompts import EXTRACT_PROMPT, RAG_PROMPT_TEMPLATE
+from server.llm.prompts.rag import RAG_PROMPT_SYSTEM
 from server.models.enums import AppErrorCode
 from server.models.open_ai import Message
 from server.models.response import ErrorDetail
@@ -29,9 +30,7 @@ logger = getLogger(__name__)
 
 
 class LlmVllm:
-
     def __init__(self):
-
         self.tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL)
 
         args = AsyncEngineArgs(
@@ -134,16 +133,40 @@ class LlmVllm:
         return final_output
 
     async def query_rag(
-        self, context_str: str, query_str: str, prompt: str | None = None
+        self,
+        context_str: str | None = None,
+        query_str: str | None = None,
+        prompt: str | None = None,
     ):
         """
         If you declare `prompt` directly, you need to declare two variables: `context_str` and `query_str`.
         """
-        return await self.query(
-            RAG_PROMPT_TEMPLATE.format(context_str=context_str, query_str=query_str)
-            if prompt is None
-            else prompt.format(context_str=context_str, query_str=query_str)
+        prompts = (
+            prompt
+            if prompt is not None
+            else (
+                [
+                    {
+                        "role": "system",
+                        "content": [
+                            {"type": "text", "text": RAG_PROMPT_SYSTEM},
+                        ],
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": RAG_PROMPT_TEMPLATE.format(
+                                    context_str=context_str, query_str=query_str
+                                ),
+                            },
+                        ],
+                    },
+                ]
+            )
         )
+        return await self.query(prompts)
 
     async def extract_entities(
         self, text: str | None = None, prompt: str | None = None

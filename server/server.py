@@ -5,6 +5,7 @@ from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
 from server import getLogger
+from server.embedding.chunking import get_chunking_process
 from server.llm.vllm import getLlm
 from server.models.enums import AppErrorCode
 from server.models.response import ApiResponse, ErrorDetail
@@ -17,6 +18,7 @@ from .routers import health, open_ai, rag
 async def lifespan(app: FastAPI):
     print("FastAPI initializing...")
 
+    await get_chunking_process()
     await getLlm()
 
     print("FastAPI initialize complete !!")
@@ -43,7 +45,6 @@ app.add_middleware(timeout.TimeoutMiddleware)
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-
     error_detail = None
     if isinstance(exc.detail, dict):
         try:

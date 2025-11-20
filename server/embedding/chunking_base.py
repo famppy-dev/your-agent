@@ -6,11 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List
 
-from llama_index.core import (
-    Settings,
-    SimpleDirectoryReader,
-    VectorStoreIndex,
-)
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
 from llama_index.core.node_parser import SemanticSplitterNodeParser, SentenceSplitter
 from llama_index.core.postprocessor import SimilarityPostprocessor
 from llama_index.core.schema import (
@@ -23,6 +19,7 @@ from llama_index.core.schema import (
 )
 from llama_index.core.vector_stores import ExactMatchFilter, MetadataFilters
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.readers.file import PyMuPDFReader
 from llama_index.vector_stores.milvus import MilvusVectorStore
 from pymilvus import MilvusException
 from transformers import AutoModel, AutoProcessor
@@ -60,7 +57,6 @@ class ChunkingResultData:
 
 
 class ChunkingProcess:
-
     def __init__(
         self,
         model_id="BAAI/bge-m3",
@@ -75,18 +71,22 @@ class ChunkingProcess:
                 self._init_embed_img_model(model_img_id)
             )
 
+        self.pdf_reader = PyMuPDFReader()
+
         self.base_splitter = SentenceSplitter(
-            chunk_size=512,
-            chunk_overlap=100,
-            paragraph_separator="\n\n",
-            secondary_chunking_regex=r"[。.!?\n]",
+            chunk_size=1024,
+            chunk_overlap=200,
+            paragraph_separator=r"\n\s*\n",
+            secondary_chunking_regex=r"(?<=[。.!?\n])\s+",
         )
 
         self.semantic_splitter = SemanticSplitterNodeParser(
-            buffer_size=1,
-            breakpoint_percentile_threshold=95,
+            buffer_size=3,
+            breakpoint_percentile_threshold=85,
             embed_model=self.embed_model,
+            include_metadata=True,
         )
+
         if reranker_model_path is None:
             logger.info("Not found reranker model")
         else:
@@ -199,12 +199,12 @@ class ChunkingProcess:
                 )
                 existing_ids.update(r["id"] for r in results)
                 logger.info(
-                    f"Batch {i//batch_size + 1}: {len(results)} existing IDs found"
+                    f"Batch {i // batch_size + 1}: {len(results)} existing IDs found"
                 )
             except MilvusException as e:
                 if "limit exceeded" in str(e):
                     logger.info(
-                        f"Batch size exceeded: Reduce {len(ids)} → {batch_size//2}"
+                        f"Batch size exceeded: Reduce {len(ids)} → {batch_size // 2}"
                     )
                     return self._safe_query_existing_ids(
                         semantic_nodes, batch_size // 2
@@ -261,26 +261,29 @@ class ChunkingProcess:
                         messages, temperature=0.2, top_p=0.95, top_k=50
                     )
                     node.text = response.outputs[0].text.strip()
+            else:
+                node.metadata = {**node.metadata, "img_vector": [0.0] * 768}
         return nodes
 
     async def _split_by_node(self, documents=List[Document]) -> List[BaseNode]:
         try:
             base_nodes = self.base_splitter.get_nodes_from_documents(documents)
             logger.info(f"SentenceSplitter length → {len(base_nodes)}")
-            logger.info(f"SentenceSplitter base_nodes → {base_nodes}")
 
             base_nodes = await self._process_img_node(base_nodes)
-
             logger.info(f"SentenceSplitter after img base_nodes → {base_nodes}")
+
             semantic_nodes = self.semantic_splitter.get_nodes_from_documents(base_nodes)
             logger.info(f"SemanticSplitter length → {len(semantic_nodes)}")
+
             semantic_nodes = self._filter_meaningless_nodes(semantic_nodes)
+            logger.info(f"meaningless_nodes length → {len(semantic_nodes)}")
 
             for i, node in enumerate(semantic_nodes):
                 if not hasattr(node, "embedding") or node.embedding is None:
                     node.embedding = self.embed_model.get_text_embedding(node.text)
                 node.metadata.setdefault("file_name", "unknown_file")
-                node.node_id = f"{node.metadata["file_name"]}_chunk_{i}"
+                node.node_id = f"{node.metadata['file_name']}_chunk_{i}"
 
             return semantic_nodes
         except Exception as e:
@@ -301,7 +304,12 @@ class ChunkingProcess:
                 input_dir=doc_dir,
                 input_files=input_files,
                 file_metadata=lambda x: {"file_name": os.path.basename(x)},
+                file_extractor={".pdf": self.pdf_reader},
             ).load_data()
+
+            # Remove Zero Width Non-Joiner when using PyMuPDFReader
+            for doc in documents:
+                doc.text_resource.text = doc.text_resource.text.replace("\u200b", "")
 
             logger.info(f"documents: {documents}")
 
@@ -325,14 +333,13 @@ class ChunkingProcess:
                 error_code=AppErrorCode.INTERNAL, message=repr(e), details=None
             )
 
-    async def query_retirival(
+    async def query_retrieval(
         self,
         query_str: str,
         top_k: int = 50,
         filters: dict = None,
         min_similarity: float = 0.5,
     ) -> List[ChunkingResultData]:
-
         try:
             retriever = self.index.as_retriever(
                 similarity_top_k=top_k,
@@ -369,7 +376,7 @@ class ChunkingProcess:
                 )
                 results.append(result)
 
-            logger.info(f"Search results: {len(nodes_with_scores)} nodes")
+            # logger.info(f"Search results: {len(nodes_with_scores)} nodes")
 
             return results
         except Exception as e:

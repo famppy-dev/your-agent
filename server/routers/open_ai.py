@@ -11,12 +11,15 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from server import getLogger
 from server.embedding.chunking import get_chunking_process
+from server.llm.prompts.rag import RAG_PROMPT_SYSTEM, RAG_PROMPT_TEMPLATE
 from server.llm.vllm import getLlm
 from server.models.open_ai import (
     ChatCompletionRequest,
     EmbeddingData,
     EmbeddingRequest,
     EmbeddingResponse,
+    Message,
+    TextPart,
 )
 
 router = APIRouter(tags=["open-ai-compatiple"])
@@ -31,8 +34,49 @@ async def chat_completions(request: Request, userRequest: ChatCompletionRequest)
 
     llm = await getLlm()
 
+    if userRequest.is_rag:
+        processor = await get_chunking_process()
+
+        system_msg = next(
+            (msg for msg in userRequest.messages if msg.role == "system"), None
+        )
+        user_msg = next(
+            (msg for msg in userRequest.messages if msg.role == "user"), None
+        )
+        if system_msg:
+            system_msg.content.append(
+                TextPart(
+                    type="text",
+                    text=f"{RAG_PROMPT_SYSTEM}",
+                )
+            )
+        else:
+            userRequest.messages.append(
+                Message(
+                    role="system",
+                    content=[
+                        TextPart(
+                            type="text",
+                            text=f"{RAG_PROMPT_SYSTEM}",
+                        )
+                    ],
+                )
+            )
+
+        if user_msg and isinstance(user_msg.content[0], TextPart):
+            retrieval_data = await processor.query_retrieval(
+                query_str=user_msg.content[0].text
+            )
+            logger.info(f"retrieval_data: {retrieval_data}")
+            context_str = " ".join(r.text for r in retrieval_data)
+            user_msg.content[0].text = RAG_PROMPT_TEMPLATE.format(
+                context_str=context_str, query_str=user_msg.content[0].text
+            )
+
     created = int(time.time())
     start_time = time.time()
+
+    logger.info(f"User Query: {userRequest.messages}")
 
     response = await llm.query(
         query_str=userRequest.messages,

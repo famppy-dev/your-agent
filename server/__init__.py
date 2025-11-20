@@ -36,6 +36,8 @@ VLM_MODEL = os.getenv("VLM_MODEL")
 VLM_DTYPE = os.getenv("VLM_DTYPE")
 VLM_MAX_MODEL_LEN = int(os.getenv("VLM_MAX_MODEL_LEN"))
 
+MAX_UPLOAD_FILE_SIZE = int(os.getenv("MAX_UPLOAD_FILE_SIZE"))
+
 
 def getLogger(name: str) -> logging.Logger:
     return logging.getLogger(name=name)
