@@ -47,6 +47,18 @@ python -m server.db.init_db
 ./start.sh
 ```
 
+### Start with docker
+Please rename the `.env` file to `.env-prod` and modify the settings to suit your operating environment. Please check the model's `path` and `milvus` addresses.
+```sh
+docker compose up -d
+```
+
+#### If you need a build...
+Please check the docker base image when building.
+```sh
+docker compose build
+```
+
 ### Basic call (OpenAI Compatible)
 ```python
 import json
