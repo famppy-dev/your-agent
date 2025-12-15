@@ -309,7 +309,10 @@ class ChunkingProcess:
 
             # Remove Zero Width Non-Joiner when using PyMuPDFReader
             for doc in documents:
-                doc.text_resource.text = doc.text_resource.text.replace("\u200b", "")
+                if doc.text_resource is not None:
+                    doc.text_resource.text = doc.text_resource.text.replace(
+                        "\u200b", ""
+                    )
 
             logger.info(f"documents: {documents}")
 
